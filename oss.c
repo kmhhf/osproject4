@@ -1,6 +1,6 @@
-//
-// Created by Kyle on 4/1/2020.
-//
+//Kyle Moore
+//OS Project 4
+//This program simulates an OS process scheduler and the processes to be scheduled.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -217,22 +217,25 @@ int main(int argc, char *argv[0])
     int totalProcesses = 0;
     int activeChildren = 0;
 
+    //set seed for random
     srand(getpid());
 
-    while((totalProcesses < 100 && timeout == 0)|| activeChildren > 0)
+    while((totalProcesses < 100 && timeout == 0)|| activeChildren > 0) //loop runs until there are 100 process and all children are finished
     {
-        if(totalProcesses < 100 && timeout == 0)
+        if(totalProcesses < 100 && timeout == 0) // forks if there has not been 100 processes
         {
             int i = 0;
             for(i = 0; i < 18; i++)
             {
-                if(bitmap[0] & (1 << i))
+                if(bitmap[0] & (1 << i)) // check bit in bitmap
                 {
                     continue;
                 }
                 else
                 {
-                    bitmap[0] |= (1 << i);
+                    bitmap[0] |= (1 << i); // set bit in the bitmap
+
+                    //initialize all data in the PCB for new process
                     simPid = i;
                     sharedPcb[i].simPid = i;
                     sharedPcb[i].processPid = totalProcesses;
@@ -254,6 +257,7 @@ int main(int argc, char *argv[0])
                     sharedPcb[i].blockedTimeNanoSeconds = 0;
                     sharedPcb[i].preempted = 0;
 
+                    //fork for new process
                     pid_t processPid = fork();
                     if(processPid == -1)
                     {
@@ -266,6 +270,7 @@ int main(int argc, char *argv[0])
                         msgctl(msgId, IPC_RMID, NULL);
                     }
 
+                    //exec into simulated process
                     if(processPid == 0)
                     {
                         char processIndex[12];
@@ -278,11 +283,14 @@ int main(int argc, char *argv[0])
                     sharedPcb[simPid].startTimeSeconds = sharedClock->seconds;
                     sharedPcb[simPid].startTimeNanoSeconds = sharedClock->nanoSeconds;
 
+                    //random chance for real-time process
                     if(rand() % 10 == 0)
                     {
                         enqueue(realTime, simPid);
                         fprintf(log, "OSS: Gernerating process with PID %d and putting it in real-time que at %d:%d\n", sharedPcb[simPid].processPid, sharedClock->seconds, sharedClock->nanoSeconds);
                     }
+
+                        //put new process into high priority queue
                     else
                     {
                         enqueue(high, simPid);
@@ -293,6 +301,8 @@ int main(int argc, char *argv[0])
                 }
             }
         }
+
+        //check if the real-time queus is empty, if not dispatch process from the queue and record in log
         while(isEmpty(realTime) == 0)
         {
             simPid = dequeue(realTime);
@@ -305,6 +315,7 @@ int main(int argc, char *argv[0])
             sharedPcb[simPid].timeLastBurstSeconds = sharedClock->seconds;
             sharedPcb[simPid].timeLastBurstNanoSeconds = sharedClock->nanoSeconds;
 
+            //check if process terminated and log results
             if(sharedPcb[simPid].terminate == 1)
             {
                 fprintf(log, "OSS: Process with PID %d terminated at %d:%d\n", sharedPcb[simPid].processPid, sharedClock->seconds, sharedClock->nanoSeconds);
@@ -324,12 +335,16 @@ int main(int argc, char *argv[0])
                     totalTimeAllNanoSeconds = totalTimeAllNanoSeconds - 1000000000;
                 }
             }
+
+                //if the process has not terminated, requeue the process
             else
             {
                 enqueue(realTime, simPid);
             }
 
         }
+
+        //check if the high queue is empty, if not dispatch process from the queue and record in log
         if(isEmpty(high) == 0)
         {
             simPid = dequeue(high);
@@ -341,6 +356,8 @@ int main(int argc, char *argv[0])
             sharedPcb[simPid].totalCpuNanoSeconds = sharedPcb[simPid].totalCpuNanoSeconds + sharedPcb[simPid].lastBurstNanoSeconds;
             sharedPcb[simPid].timeLastBurstSeconds = sharedClock->seconds;
             sharedPcb[simPid].timeLastBurstNanoSeconds = sharedClock->nanoSeconds;
+
+            //if process was blocked put in blocked queue
             if(sharedPcb[simPid].blocked == 1)
             {
                 fprintf(log, "OSS: Process with PID %d was blocked and put in blocked queue at %d:%d\n", sharedPcb[simPid].processPid, sharedClock->seconds, sharedClock->nanoSeconds);
@@ -349,12 +366,16 @@ int main(int argc, char *argv[0])
                 totalBlocked++;
                 totalBlockedTime = totalBlockedTime + ((sharedPcb[simPid].blockedTimeSeconds * 1000000000) + sharedPcb[simPid].blockedTimeNanoSeconds);
             }
+
+                //report if process was preempted
             else if(sharedPcb[simPid].preempted == 1)
             {
                 enqueue(high, simPid);
                 fprintf(log, "OSS: Process with PID %d was preempted by another process at %d:%d\n", sharedPcb[simPid].processPid, sharedClock->seconds, sharedClock->nanoSeconds);
                 sharedPcb[simPid].preempted = 0;
             }
+
+                //check if process terminated.  if it did, remove bit in bitmap and record in log
             else if(sharedPcb[simPid].terminate == 1)
             {
                 fprintf(log, "OSS: Process with PID %d terminated at %d:%d\n", sharedPcb[simPid].processPid, sharedClock->seconds, sharedClock->nanoSeconds);
@@ -376,6 +397,8 @@ int main(int argc, char *argv[0])
                 totalWaitTime = totalWaitTime + ((sharedPcb[simPid].waitSeconds * 1000000000) + sharedPcb[simPid].waitNanoSeconds);
                 totalCpuTime = totalCpuTime + sharedPcb[simPid].totalCpuNanoSeconds;
             }
+
+                //if process finished its timeslice, put process in lower queue
             else
             {
                 enqueue(mid, simPid);
@@ -384,6 +407,7 @@ int main(int argc, char *argv[0])
         }
 
 
+            //check if the mid queue is empty, if not dispatch process from the queue and record in log
         else if(isEmpty(mid) == 0)
         {
             simPid = dequeue(mid);
@@ -395,6 +419,8 @@ int main(int argc, char *argv[0])
             sharedPcb[simPid].totalCpuNanoSeconds = sharedPcb[simPid].totalCpuNanoSeconds + sharedPcb[simPid].lastBurstNanoSeconds;
             sharedPcb[simPid].timeLastBurstSeconds = sharedClock->seconds;
             sharedPcb[simPid].timeLastBurstNanoSeconds = sharedClock->nanoSeconds;
+
+            //if process was blocked put in blocked queue
             if(sharedPcb[simPid].blocked == 1)
             {
                 fprintf(log, "OSS: Process with PID %d was blocked and put in blocked queue at %d:%d\n", sharedPcb[simPid].processPid, sharedClock->seconds, sharedClock->nanoSeconds);
@@ -403,6 +429,8 @@ int main(int argc, char *argv[0])
                 totalBlocked++;
                 totalBlockedTime = totalBlockedTime + ((sharedPcb[simPid].blockedTimeSeconds * 1000000000) + sharedPcb[simPid].blockedTimeNanoSeconds);
             }
+
+                //report if process was preempted
             else if(sharedPcb[simPid].preempted == 1)
             {
                 fprintf(log, "OSS: Process with PID %d was preempted by another process at %d:%d\n", sharedPcb[simPid].processPid, sharedClock->seconds, sharedClock->nanoSeconds);
@@ -410,6 +438,8 @@ int main(int argc, char *argv[0])
                 sharedPcb[simPid].preempted = 0;
                 sharedPcb[simPid].priority = 1;
             }
+
+                //check if process terminated.  if it did, remove bit in bitmap and record in log
             else if(sharedPcb[simPid].terminate == 1)
             {
                 fprintf(log, "OSS: Process with PID %d terminated at %d:%d\n", sharedPcb[simPid].processPid, sharedClock->seconds, sharedClock->nanoSeconds);
@@ -431,6 +461,8 @@ int main(int argc, char *argv[0])
                 totalWaitTime = totalWaitTime + ((sharedPcb[simPid].waitSeconds * 1000000000) + sharedPcb[simPid].waitNanoSeconds);
                 totalCpuTime = totalCpuTime + sharedPcb[simPid].totalCpuNanoSeconds;
             }
+
+                //if process finished its timeslice, put process in lower queue
             else
             {
                 enqueue(low, simPid);
@@ -439,6 +471,7 @@ int main(int argc, char *argv[0])
         }
 
 
+            //check if the low queue is empty, if not dispatch process from the queue and record in log
         else if(isEmpty(low) == 0)
         {
             simPid = dequeue(low);
@@ -450,6 +483,8 @@ int main(int argc, char *argv[0])
             sharedPcb[simPid].totalCpuNanoSeconds = sharedPcb[simPid].totalCpuNanoSeconds + sharedPcb[simPid].lastBurstNanoSeconds;
             sharedPcb[simPid].timeLastBurstSeconds = sharedClock->seconds;
             sharedPcb[simPid].timeLastBurstNanoSeconds = sharedClock->nanoSeconds;
+
+            //if process was blocked put in blocked queue
             if(sharedPcb[simPid].blocked == 1)
             {
                 fprintf(log, "OSS: Process with PID %d was blocked and put in blocked queue at %d:%d\n", sharedPcb[simPid].processPid, sharedClock->seconds, sharedClock->nanoSeconds);
@@ -458,6 +493,8 @@ int main(int argc, char *argv[0])
                 totalBlocked++;
                 totalBlockedTime = totalBlockedTime + ((sharedPcb[simPid].blockedTimeSeconds * 1000000000) + sharedPcb[simPid].blockedTimeNanoSeconds);
             }
+
+                //report if process was preempted
             else if(sharedPcb[simPid].preempted == 1)
             {
                 fprintf(log, "OSS: Process with PID %d was preempted by another process at %d:%d\n", sharedPcb[simPid].processPid, sharedClock->seconds, sharedClock->nanoSeconds);
@@ -465,6 +502,8 @@ int main(int argc, char *argv[0])
                 sharedPcb[simPid].preempted = 0;
                 sharedPcb[simPid].priority = 1;
             }
+
+                //check if process terminated.  if it did, remove bit in bitmap and record in log
             else if(sharedPcb[simPid].terminate == 1)
             {
                 fprintf(log, "OSS: Process with PID %d terminated at %d:%d\n", sharedPcb[simPid].processPid, sharedClock->seconds, sharedClock->nanoSeconds);
@@ -486,12 +525,15 @@ int main(int argc, char *argv[0])
                 totalWaitTime = totalWaitTime + ((sharedPcb[simPid].waitSeconds * 1000000000) + sharedPcb[simPid].waitNanoSeconds);
                 totalCpuTime = totalCpuTime + sharedPcb[simPid].totalCpuNanoSeconds;
             }
+
+                //if process finished its timeslice, put process back in low queue
             else
             {
                 enqueue(low, simPid);
             }
         }
 
+            //if all queues were empty, report idle CPU time
         else
         {
             random = rand() % 5000;
@@ -501,6 +543,7 @@ int main(int argc, char *argv[0])
         sharedClock->nanoSeconds = sharedClock->nanoSeconds + random;
         fprintf(log, "OSS: Dispatch took %d nanoseconds\n", random);
 
+        //check blocked process to see if the wait time has passed. If so, move it to high queue
         if(isEmpty(blocked) == 0)
         {
             simPid = dequeue(blocked);
@@ -519,6 +562,7 @@ int main(int argc, char *argv[0])
 
         }
 
+        //if process has been in mid queue for more than 2 seconds without running, move it up to high queue
         if(isEmpty(mid) == 0)
         {
             simPid = dequeue(mid);
@@ -534,7 +578,7 @@ int main(int argc, char *argv[0])
             }
         }
 
-
+        //if process has been in low queue for more than 2 seconds without running, move it up to high queue
         if(isEmpty(low) == 0)
         {
             simPid = dequeue(low);
@@ -549,27 +593,35 @@ int main(int argc, char *argv[0])
                 enqueue(low, simPid);
             }
         }
+
+        //Adding the required 1.xx seconds per loop
         sharedClock->seconds = sharedClock->seconds + 1;
         sharedClock->nanoSeconds = sharedClock->nanoSeconds + (rand() % 1001);
-
     }
+
+    //print out stats after processes finish
     printf("Average total wait time per process was %d seconds and %d nanoseconds\n", (totalWaitTime / 1000000000) / 100, (totalWaitTime % 1000000000) / 100);
     printf("Average CPU usage for each process was %d seconds and %d nanoseconds\n", (totalCpuTime / 1000000000) / 100, (totalCpuTime % 1000000000) / 100);
     printf("Average time in blocked que per process was %d seconds and %d nanoseconds\n", (totalBlockedTime / 1000000000) / 100, (totalBlockedTime % 1000000000) / 100);
     printf("Total CPU idle time was %d nanoseconds\n", totalCpuIdleTime);
 
+    //close out the file
     fflush(log);
     fclose(log);
     log = NULL;
 
+    //free some mem
     free(high);
     free(mid);
     free(low);
     free(blocked);
     free(realTime);
 
+    //detach shared memory
     shmdt(sharedClock);
     shmdt(sharedPcb);
+
+    //delete shared memory
     shmctl(pcbShmid, IPC_RMID, NULL);
     shmctl(clockShmid, IPC_RMID, NULL);
     msgctl(msgId, IPC_RMID, NULL);
@@ -577,12 +629,14 @@ int main(int argc, char *argv[0])
     return 0;
 }
 
+//creates new queue
 void createQueue(struct queue* que)
 {
     que->first = NULL;
     que->last = NULL;
 }
 
+//enqueues new node
 void enqueue(struct queue* que, int pid)
 {
     struct node* temp;
@@ -611,6 +665,7 @@ void enqueue(struct queue* que, int pid)
     }
 }
 
+//dequeue a node
 int dequeue(struct queue* que)
 {
     struct node* temp;
@@ -621,6 +676,7 @@ int dequeue(struct queue* que)
     return(pid);
 }
 
+//checks if queue is empty
 int isEmpty(struct queue* que)
 {
     if(que->first == NULL)

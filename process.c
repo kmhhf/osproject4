@@ -1,7 +1,3 @@
-//
-// Created by Kyle on 4/1/2020.
-//
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ipc.h>
@@ -11,6 +7,7 @@
 #include <sys/msg.h>
 #include <sys/types.h>
 
+// struct for process control block
 struct PCB
 {
     int simPid;
@@ -34,12 +31,14 @@ struct PCB
     int preempted;
 };
 
+//struct for simulated clock
 struct Clock
 {
     long seconds;
     long nanoSeconds;
 };
 
+//struct for shared message
 struct message
 {
     long mtype;
@@ -49,8 +48,11 @@ int main(int argc, char *argv[0])
 {
     struct message messageReceive;
     struct message messageSend;
+
+    //set mtype to send back to oss
     messageSend.mtype = 19;
 
+    //get key and shared message
     key_t msgKey = ftok("oss", 1);
     int msgId = msgget(msgKey, 0666);
     if (msgId == -1)
@@ -60,6 +62,7 @@ int main(int argc, char *argv[0])
         exit(EXIT_FAILURE);
     }
 
+    //get key and shared mem for PCB
     key_t pcbKey = ftok("oss",2);
     int pcbShmid = shmget(pcbKey, sizeof(struct PCB) * 18, 0666);
     if(pcbShmid == -1)
@@ -77,6 +80,7 @@ int main(int argc, char *argv[0])
         exit(EXIT_FAILURE);
     }
 
+    //get key and shared mem for shared clock
     key_t clockKey = ftok("oss", 3);
     int clockShmid = shmget(clockKey, sizeof(struct Clock), 0666);
     if(clockShmid == -1)
@@ -98,12 +102,18 @@ int main(int argc, char *argv[0])
     int random;
     int randomNano;
     int quantum = 10000000;
+
+    //set seed for rand
     srand(getpid());
 
     while(1)
     {
         quantum = 10000000;
+
+        //wait for message from OSS to get cpu
         msgrcv(msgId, &messageReceive, sizeof(struct message), pcbIndex + 1, 0);
+
+        //time calculations
         sharedPcb[pcbIndex].waitSeconds = (sharedClock->seconds - sharedPcb[pcbIndex].timeLastBurstSeconds);
         if(sharedClock->nanoSeconds < sharedPcb[pcbIndex].timeLastBurstNanoSeconds)
         {
@@ -122,6 +132,7 @@ int main(int argc, char *argv[0])
             sharedPcb[pcbIndex].waitSeconds = sharedPcb[pcbIndex].waitSeconds + 1;
         }
 
+        //set quantum depending on which queue the process was in
         int priority = sharedPcb[pcbIndex].priority;
         if(priority == 0)
         {
@@ -149,6 +160,8 @@ int main(int argc, char *argv[0])
         {
             sharedPcb[pcbIndex].lastBurstNanoSeconds = rand() % quantum;
             sharedPcb[pcbIndex].terminate = 1;
+
+            //send message back to OSS
             msgsnd(msgId, &messageSend, sizeof(struct message), 0);
             shmdt(sharedClock);
             shmdt(sharedPcb);
@@ -160,6 +173,8 @@ int main(int argc, char *argv[0])
         if(random == 0)
         {
             sharedPcb[pcbIndex].lastBurstNanoSeconds = quantum;
+
+            //send message back to OSS
             msgsnd(msgId, &messageSend, sizeof(struct message), 0);
         }
 
@@ -168,21 +183,27 @@ int main(int argc, char *argv[0])
         {
             random = rand() % 4;
             randomNano = rand() % 1001;
+
+            //determine if the process was preempted
             if(random == 3)
             {
                 random = (rand() % 99) + 1;
                 sharedPcb[pcbIndex].lastBurstNanoSeconds = quantum / 100 * random;
                 sharedPcb[pcbIndex].preempted = 1;
+
+                //send message back to OSS
                 msgsnd(msgId, &messageSend, sizeof(struct message), 0);
             }
 
-
+                //message is blocked. report in PCB
             else
             {
                 sharedPcb[pcbIndex].blocked = 1;
                 sharedPcb[pcbIndex].lastBurstNanoSeconds = rand() % quantum;
                 sharedPcb[pcbIndex].blockedTimeSeconds = random;
                 sharedPcb[pcbIndex].blockedTimeNanoSeconds = randomNano;
+
+                //send message back to OSS
                 msgsnd(msgId, &messageSend, sizeof(struct message), 0);
             }
         }
